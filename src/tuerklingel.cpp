@@ -134,11 +134,16 @@ void setup() {
 
   //----Set device we use SD as default----
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
- 
+
+  //----Init Pushbutton pin----
+  pinMode(PIN_BTN, INPUT_PULLUP);
+  
 }
 
 void loop() {
-  playMelody();
+    if (digitalRead(PIN_BTN)) {
+        playMelody();
+    }
   delay(2000);
   if (myDFPlayer.available()) {
     printDetail(myDFPlayer.readType(), myDFPlayer.read()); //Print the detail message from DFPlayer to handle different errors and states.
