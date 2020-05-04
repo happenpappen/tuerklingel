@@ -111,7 +111,7 @@ void loadSettings()
     EEPROM.get(address++, version);
 
     if (version == SETTINGS_MAGIC)
-    {   // Valid settings in EEPROM?
+    { // Valid settings in EEPROM?
         // FIXME       EEPROM.get(address, dispMode);
     }
     else
@@ -172,6 +172,30 @@ void setup()
 
     //----Init Pushbutton pin----
     pinMode(PIN_BTN, INPUT_PULLUP);
+
+    //----Time and date settings----
+    Particle.syncTime();
+    Time.zone(+1);
+    beginning.hour = 2;
+    beginning.day = DST::days::sun;
+    beginning.month = DST::months::mar;
+    beginning.occurrence = -1;
+
+    end.hour = 3;
+    end.day = DST::days::sun;
+    end.month = DST::months::oct;
+    end.occurrence = -1;
+
+    dst.begin(beginning, end, 1);
+    dst.check();
+    dst.automatic(true);
+
+    client.connect(System.deviceID(), MQTT_USER, MQTT_PASSWORD); // uid:pwd based authentication
+    if (client.isConnected())
+    {
+        PublisherTimer.start();
+        client.subscribe("/" + System.deviceID() + "/set/+");
+    }
 }
 
 void loop()
