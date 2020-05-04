@@ -17,6 +17,10 @@ DST dst;
 dst_limit_t beginning;
 dst_limit_t end;
 
+int button_pressed=1;
+String lastVisitDate="";
+String myID = System.deviceID();
+
 #define ONE_DAY_MILLIS (24 * 60 * 60 * 1000)
 unsigned long lastSync = millis();
 
@@ -27,6 +31,7 @@ void saveSettings();
 void loadSettings();
 void printDetail(uint8_t type, int value);
 void publishState();
+void publishButtonPushed();
 
 // Timer functions:
 //
@@ -47,8 +52,6 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
     memcpy(myPayload, payload, length);
     myPayload[length] = 0;
 
-    String myID = System.deviceID();
-
     if (!client.isConnected()) {
         client.connect(myID, MQTT_USER, MQTT_PASSWORD);
     }
@@ -65,14 +68,26 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
 
 void publishState() {
 
-    String myID = System.deviceID();
-    
     if (!client.isConnected()) {
         client.connect(myID, MQTT_USER, MQTT_PASSWORD);
     }
 
     if (client.isConnected()) {
         client.publish("/" + myID + "/state/FirmwareVersion", System.version());
+    }
+}
+
+void publishButtonPushed() {
+
+    lastVisitDate = Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL);
+    
+    if (!client.isConnected()) {
+        client.connect(myID, MQTT_USER, MQTT_PASSWORD);
+    }
+
+    if (client.isConnected()) {
+        client.publish("/" + myID + "/state/Visitor", "True");
+        client.publish("/" + myID + "/state/VisitorDate", lastVisitDate);
     }
 }
 
@@ -126,7 +141,7 @@ void setup() {
   myDFPlayer.setTimeOut(500);
 
   //----Set volume----
-  myDFPlayer.volume(20);  //Set volume value (0~30).
+  myDFPlayer.volume(30);  //Set volume value (0~30).
 
   //----Set different EQ----
   //myDFPlayer.EQ(DFPLAYER_EQ_NORMAL);
@@ -141,72 +156,14 @@ void setup() {
 }
 
 void loop() {
-    if (digitalRead(PIN_BTN)) {
+    button_pressed = digitalRead(PIN_BTN);
+    Serial.print(F("Button read: "));
+    Serial.println(button_pressed);
+    if (button_pressed == LOW) {
+        Serial.println(F("Button pushed!"));
+        button_pressed=HIGH;
+        publishButtonPushed();
         playMelody();
     }
-  delay(2000);
-  if (myDFPlayer.available()) {
-    printDetail(myDFPlayer.readType(), myDFPlayer.read()); //Print the detail message from DFPlayer to handle different errors and states.
-  }
-}
-
-void printDetail(uint8_t type, int value) {
-  switch (type) {
-    case TimeOut:
-      Serial.println(F("Time Out!"));
-      break;
-    case WrongStack:
-      Serial.println(F("Stack Wrong!"));
-      break;
-    case DFPlayerCardInserted:
-      Serial.println(F("Card Inserted!"));
-      break;
-    case DFPlayerCardRemoved:
-      Serial.println(F("Card Removed!"));
-      break;
-    case DFPlayerCardOnline:
-      Serial.println(F("Card Online!"));
-      break;
-    case DFPlayerUSBInserted:
-      Serial.println("USB Inserted!");
-      break;
-    case DFPlayerUSBRemoved:
-      Serial.println("USB Removed!");
-      break;
-    case DFPlayerPlayFinished:
-      Serial.print(F("Number:"));
-      Serial.print(value);
-      Serial.println(F(" Play Finished!"));
-      break;
-    case DFPlayerError:
-      Serial.print(F("DFPlayerError:"));
-      switch (value) {
-        case Busy:
-          Serial.println(F("Card not found"));
-          break;
-        case Sleeping:
-          Serial.println(F("Sleeping"));
-          break;
-        case SerialWrongStack:
-          Serial.println(F("Get Wrong Stack"));
-          break;
-        case CheckSumNotMatch:
-          Serial.println(F("Check Sum Not Match"));
-          break;
-        case FileIndexOut:
-          Serial.println(F("File Index Out of Bound"));
-          break;
-        case FileMismatch:
-          Serial.println(F("Cannot Find File"));
-          break;
-        case Advertise:
-          Serial.println(F("In Advertise"));
-          break;
-        default:
-          break;
-      }
-      break;
-    default:
-      break;
-  }
+    delay(200);
 }
