@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+        <title>Doorbell settings</title>
+        <style>
+            div,
+            fieldset,
+            input,
+            select {
+                padding: 5px;
+                font-size: 1em;
+            }
+            fieldset {
+                background-color: #f2f2f2;
+            }
+            p {
+                margin: 0.5em 0;
+            }
+            input {
+                width: 100%;
+                box-sizing: border-box;
+                -webkit-box-sizing: border-box;
+                -moz-box-sizing: border-box;
+            }
+            input[type=checkbox],
+            input[type=radio] {
+                width: 1em;
+                margin-right: 6px;
+                vertical-align: -1px;
+            }
+            select {
+                width: 100%;
+            }
+            textarea {
+                resize: none;
+                width: 98%;
+                height: 318px;
+                padding: 5px;
+                overflow: auto;
+            }
+            body {
+                text-align: center;
+                font-family: verdana;
+            }
+            td {
+                padding: 0;
+            }
+            button {
+                border: 0;
+                border-radius: 0.3rem;
+                background-color: #1fa3ec;
+                color: #fff;
+                line-height: 2.4rem;
+                font-size: 1.2rem;
+                width: 100%;
+                -webkit-transition-duration: 0.4s;
+                transition-duration: 0.4s;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #0e70a4;
+            }
+            .bred {
+                background-color: #d43535;
+            }
+            .bred:hover {
+                background-color: #931f1f;
+            }
+            .bgrn {
+                background-color: #47c266;
+            }
+            .bgrn:hover {
+                background-color: #5aaf6f;
+            }
+            a {
+                text-decoration: none;
+            }
+            .p {
+                float: left;
+                text-align: left;
+            }
+            .q {
+                float: right;
+                text-align: right;
+            }
+            input[type=range] {
+                height: 34px;
+                -webkit-appearance: none;
+                margin: 10px 0;
+                width: 100%;
+            }
+            input[type=range]:focus {
+                outline: none;
+            }
+            input[type=range]::-webkit-slider-runnable-track {
+                width: 100%;
+                height: 12px;
+                cursor: pointer;
+                animate: 0.2s;
+                box-shadow: 1px 1px 1px #002200;
+                background: #205928;
+                border-radius: 1px;
+                border: 1px solid #18D501;
+            }
+            input[type=range]::-webkit-slider-thumb {
+                box-shadow: 3px 3px 3px #00AA00;
+                border: 2px solid #83E584;
+                height: 23px;
+                width: 23px;
+                border-radius: 23px;
+                background: #439643;
+                cursor: pointer;
+                -webkit-appearance: none;
+                margin-top: -7px;
+            }
+            input[type=range]:focus::-webkit-slider-runnable-track {
+                background: #205928;
+            }
+            input[type=range]::-moz-range-track {
+                width: 100%;
+                height: 12px;
+                cursor: pointer;
+                animate: 0.2s;
+                box-shadow: 1px 1px 1px #002200;
+                background: #205928;
+                border-radius: 1px;
+                border: 1px solid #18D501;
+            }
+            input[type=range]::-moz-range-thumb {
+                box-shadow: 3px 3px 3px #00AA00;
+                border: 2px solid #83E584;
+                height: 23px;
+                width: 23px;
+                border-radius: 23px;
+                background: #439643;
+                cursor: pointer;
+            }
+            input[type=range]::-ms-track {
+                width: 100%;
+                height: 12px;
+                cursor: pointer;
+                animate: 0.2s;
+                background: transparent;
+                border-color: transparent;
+                color: transparent;
+            }
+            input[type=range]::-ms-fill-lower {
+                background: #205928;
+                border: 1px solid #18D501;
+                border-radius: 2px;
+                box-shadow: 1px 1px 1px #002200;
+            }
+            input[type=range]::-ms-fill-upper {
+                background: #205928;
+                border: 1px solid #18D501;
+                border-radius: 2px;
+                box-shadow: 1px 1px 1px #002200;
+            }
+            input[type=range]::-ms-thumb {
+                margin-top: 1px;
+                box-shadow: 3px 3px 3px #00AA00;
+                border: 2px solid #83E584;
+                height: 23px;
+                width: 23px;
+                border-radius: 23px;
+                background: #439643;
+                cursor: pointer;
+            }
+            input[type=range]:focus::-ms-fill-lower {
+                background: #205928;
+            }
+            input[type=range]:focus::-ms-fill-upper {
+                background: #205928;
+            }
+        </style>
+    </head>
+    <body>
+        <div style="text-align:left;display:inline-block;min-width:340px;">
+            <div style="text-align:center;">
+                <noscript>JavaScript aktivieren um Tasmota benutzen zu können<br/></noscript>
+                <h2>Türklingel</h2>
+            </div>
+            <fieldset>
+                <legend>
+                    <b>&nbsp;Einstellungen&nbsp;</b>
+                </legend>
+
+                <form action="index.html" oninput="x.value=parseInt(volume.value)" method="POST">
+                    <label for="melody">Melodie:</label>
+                    <select id="melody" name="melody_nr">
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                        <option>4</option>
+                        <option>5</option>
+                    </select>
+                    <p/>
+                    <label for="volume">Lautstärke (<output name="x" for="volume">25</output>):</label>
+                    <input id="volume" name="volume" type="range" min="0" max="30" value="25"/>
+                    <label for="silence_begin">Ruhezeit Start:</label>
+                    <input id="silence_begin" type="time" value="22:00"/><p/>
+                    <label for="silence_end">Ruhezeit Ende:</label>
+                    <input id="silence_end" type="time" value="06:00"/><p/>
+                    <label for="debug">Debug:</label><input id="debug" type="checkbox"/><p/>
+                    <input type="submit" value="Speichern" class="button bgrn">
+                </form>
+            </fieldset>
+        </div>
+    </body>
+</html>
