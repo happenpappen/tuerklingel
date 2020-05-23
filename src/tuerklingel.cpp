@@ -7,9 +7,9 @@
 
 #include <stdlib.h>
 
-#define PIN_BTN D5
+#define PIN_BTN D0
 
-#define SETTINGS_MAGIC 43
+#define SETTINGS_MAGIC 45
 #define SETTINGS_START 1
 
 // For daylight saving time:
@@ -22,6 +22,10 @@ int button_pressed = 1;
 bool debug = true;
 int current_melody = 2;
 int current_volume = 30;
+
+bool silence_enabled = false;
+String silenceBegin = "22:00";
+String silenceEnd = "06:00";
 
 String lastVisitDate = "";
 String myID = System.deviceID();
@@ -58,31 +62,30 @@ P(Page_start) = "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" co
 P(Page_end) = "</body></html>";
 P(form_start) = "<div style=\"text-align:left;display:inline-block;min-width:340px;\"><div style=\"text-align:center;\"><noscript>JavaScript aktivieren diese Seit benutzen zu können<br/></noscript><h2>Türklingel</h2></div><fieldset><legend><b>&nbsp;Einstellungen&nbsp;</b></legend><form action=\"index.html\" oninput=\"x.value=parseInt(volume.value)\" method=\"POST\">";
 P(form_end) = "<input type=\"submit\" value=\"Speichern\" class=\"button bgrn\"></form></fieldset></div>";
-P(form_field_melody_start) ="<label for=\"melody\">Melodie:</label><select id=\"melody\" name=\"melody_nr\">";
-P(form_field_melody_end) ="</select><p/>";
-P(form_field_volume_start) ="<label for=\"volume\">Lautstärke (<output name=\"x\" for=\"volume\">";
-P(form_field_volume_end) ="</output>):</label><input id=\"volume\" name=\"volume\" type=\"range\" min=\"0\" max=\"30\" ";
-P(form_field_silence_begin) ="<label for=\"silence_begin\">Ruhezeit Start:</label><input id=\"silence_begin\" type=\"time\" value=\"22:00\"/><p/>";
-P(form_field_silence_end) ="<label for=\"silence_end\">Ruhezeit Ende:</label><input id=\"silence_end\" type=\"time\" value=\"06:00\"/><p/>";
-P(form_field_debug_unchecked) ="<label for=\"debug\">Debug:</label><input id=\"debug\" type=\"checkbox\"/><p/>";
-P(form_field_debug_checked) ="<label for=\"debug\">Debug:</label><input id=\"debug\" type=\"checkbox\" checked /><p/>";
+P(form_play_melody) = "<input type=\"submit\" value=\"Melodie spielen\" class=\"button\">";
+P(form_field_melody_start) = "<label for=\"melody\">Melodie:</label><select id=\"melody\" name=\"melody_nr\">";
+P(form_field_melody_end) = "</select><p/>";
+P(form_field_volume_start) = "<label for=\"volume\">Lautstärke (<output name=\"x\" for=\"volume\">";
+P(form_field_volume_end) = "</output>):</label><input id=\"volume\" name=\"volume\" type=\"range\" min=\"0\" max=\"30\" ";
+P(form_field_silence_begin_start) = "<label for=\"silence_begin\">Ruhezeit Start:</label><input id=\"silence_begin\" name=\"silence_begin\" type=\"time\" value=\"";
+P(form_field_silence_begin_end) = "\"/><p/>";
+P(form_field_silence_end_start) = "<label for=\"silence_end\">Ruhezeit Ende:</label><input id=\"silence_end\" name=\"silence_end\" type=\"time\" value=\"";
+P(form_field_silence_end_end) = "\"/><p/>";
+P(form_field_silence_unchecked) = "<label for=\"silence_enabled\">Ruhezeit aktivieren:</label><input id=\"silence_enabled\" name=\"silence_enabled\" type=\"checkbox\"/><p/>";
+P(form_field_silence_checked) = "<label for=\"silence_enabled\">Ruhezeit aktivieren:</label><input id=\"silence_enabled\" name=\"silence_enabled\" type=\"checkbox\" checked /><p/>";
+P(form_field_debug_unchecked) = "<label for=\"debug\">Debug:</label><input id=\"debug\" name=\"debug\" type=\"checkbox\"/><p/>";
+P(form_field_debug_checked) = "<label for=\"debug\">Debug:</label><input id=\"debug\" name=\"debug\" type=\"checkbox\" checked /><p/>";
+P(form_last_visit) = "Letzter Besuch: ";
 
-// Aus dem Beispiel:
-P(Get_head) = "<h1>GET from ";
-P(Post_head) = "<h1>POST to ";
-P(Unknown_head) = "<h1>UNKNOWN request for ";
-P(Default_head) = "unidentified URL requested.</h1><br>\n";
-P(Raw_head) = "raw.html requested.</h1><br>\n";
-P(Parsed_head) = "parsed.html requested.</h1><br>\n";
-P(Good_tail_begin) = "URL tail = '";
-P(Bad_tail_begin) = "INCOMPLETE URL tail = '";
-P(Tail_end) = "'<br>\n";
-P(Parsed_tail_begin) = "URL parameters:<br>\n";
-P(Parsed_item_separator) = " = '";
-P(Params_end) = "End of parameters<br>\n";
-P(Post_params_begin) = "Parameters sent by POST:<br>\n";
-P(Line_break) = "<br>\n";
-
+// Values in POST request:
+//
+static const char valMelody[] PROGMEM = "melody_nr";
+static const char valVolume[] PROGMEM = "volume";
+static const char valSilenceBegin[] PROGMEM = "silence_begin";
+static const char valSilenceEnd[] PROGMEM = "silence_end";
+static const char valSilenceEnabled[] PROGMEM = "silence_enabled";
+static const char valDebug[] PROGMEM = "debug";
+static const char valPlayMelody[] PROGMEM = "play_melody";
 
 /* This creates an instance of the webserver.  By specifying a prefix
  * of "", all pages will be at the root of the server. */
@@ -92,186 +95,131 @@ WebServer webserver(PREFIX, 80);
 /* commands are functions that get called by the webserver framework
  * they can read any posted data from client, and they output to the
  * server to send data back to the web browser. */
-void helloCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete)
+void indexCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete)
 {
-  /* this line sends the standard "we're all OK" headers back to the
+    // Variables for parsing POST parameters:
+    //
+    bool repeat = false, debug_parsed = false, silence_enabled_parsed = false;
+    char name[20], value[48];
+    int int_value = 0,
+        valLen = 0;
+
+    String cmd, password, prm;
+
+    /* this line sends the standard "we're all OK" headers back to the
      browser */
-  server.httpSuccess();
+    server.httpSuccess();
 
-  /* if we're handling a GET or POST, we can output our data here.
+    /* if we're handling a GET or POST, we can output our data here.
      For a HEAD request, we just stop after outputting headers. */
-  if (type == WebServer::HEAD)
-    return;
+    if (type == WebServer::HEAD)
+        return;
 
-  server.printP(Page_start);
+    server.printP(Page_start);
 
-  switch (type)
+    switch (type)
     {
-    case WebServer::GET:
-        break;
     case WebServer::POST:
+        do
+        {
+            repeat = server.readPOSTparam(name, sizeof(name), value, sizeof(value));
+            valLen = strlen(value);
+            if (debug)
+            {
+                Particle.publish("DEBUG: Post-Parameter: '" + String(name) + "' read, Value: " + String(value), PRIVATE);
+            }
+            if (!strcmp_P(name, valMelody))
+            {
+                int_value = atoi(value);
+                if (int_value > 0 && int_value <= myDFPlayer.readFileCounts())
+                {
+                    current_melody = int_value;
+                }
+            }
+            else if (!strcmp_P(name, valVolume))
+            {
+                int_value = atoi(value);
+                if (int_value > 0 && int_value <= 30)
+                {
+                    current_volume = int_value;
+                }
+            }
+            else if (!strcmp_P(name, valSilenceEnabled))
+            {
+                if (!strcmp_P("on", value))
+                {
+                    silence_enabled = true;
+                }
+                else
+                {
+                    silence_enabled = false;
+                }
+            }
+            else if (!strcmp_P(name, valSilenceBegin))
+            {
+                silenceBegin = String(value);
+            }
+            else if (!strcmp_P(name, valSilenceEnd))
+            {
+                silenceEnd = String(value);
+            }
+            else if (!strcmp_P(name, valDebug))
+            {
+                if (!strcmp_P("on", value))
+                {
+                    debug = true;
+                }
+                else
+                {
+                    debug = false;
+                }
+            }
+        } while (repeat);
+        saveSettings();
         break;
     default:
-        ;
+        break;
     }
 
     server.printP(form_start);
-    server.printP(form_field_melody_start);
 
-    for(int i=1; i < myDFPlayer.readFileCounts(); i++) {
-        if (i == current_melody) {
-            server.printf("<option selected>%d</option>",i);
-        } else {
-            server.printf("<option>%d</option>",i);
+    server.printP(form_field_melody_start);
+    for (int i = 1; i < myDFPlayer.readFileCounts(); i++)
+    {
+        if (i == current_melody)
+        {
+            server.printf("<option selected>%d</option>", i);
+        }
+        else
+        {
+            server.printf("<option>%d</option>", i);
         }
     }
     server.printP(form_field_melody_end);
+
     server.printP(form_field_volume_start);
-    server.printf("%d",current_volume);
+    server.printf("%d", current_volume);
     server.printP(form_field_volume_end);
-    server.printf("value=\"%d\"/>",current_volume);
-    server.printP(form_field_silence_begin);
-    server.printP(form_field_silence_end);
-    if (debug) {
-        server.printP(form_field_debug_checked);
-    } else {
-        server.printP(form_field_debug_checked);
-    }
+    server.printf("value=\"%d\"/>", current_volume);
+
+    server.radioButton("silence_enabled", "on", "Ruhezeit aktivieren<p/>", silence_enabled ? true : false);
+    server.radioButton("silence_enabled", "off", "Ruhezeit deaktivieren<p/>", silence_enabled ? false : true);
+
+    server.printP(form_field_silence_begin_start);
+    server.printf("%s", silenceBegin.c_str());
+    server.printP(form_field_silence_begin_end);
+
+    server.printP(form_field_silence_end_start);
+    server.printf("%s", silenceEnd.c_str());
+    server.printP(form_field_silence_end_end);
+
+    server.radioButton("debug", "on", "Debug an<p/>", debug ? true : false);
+    server.radioButton("debug", "off", "Debug aus<p/>", debug ? false : true);
+
+    server.printP(form_play_melody);
+
     server.printP(form_end);
     server.printP(Page_end);
-
-}
-
-void rawCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete)
-{
-  /* this line sends the standard "we're all OK" headers back to the
-     browser */
-  server.httpSuccess();
-
-  /* if we're handling a GET or POST, we can output our data here.
-     For a HEAD request, we just stop after outputting headers. */
-  if (type == WebServer::HEAD)
-    return;
-
-  server.printP(Page_start);
-  switch (type)
-    {
-    case WebServer::GET:
-        server.printP(Get_head);
-        break;
-    case WebServer::POST:
-        server.printP(Post_head);
-        break;
-    default:
-        server.printP(Unknown_head);
-    }
-
-    server.printP(Raw_head);
-    server.printP(tail_complete ? Good_tail_begin : Bad_tail_begin);
-    server.print(url_tail);
-    server.printP(Tail_end);
-    server.printP(Page_end);
-
-}
-
-#define NAMELEN 32
-#define VALUELEN 32
-
-void parsedCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete)
-{
-  URLPARAM_RESULT rc;
-  char name[NAMELEN];
-  char value[VALUELEN];
-
-  /* this line sends the standard "we're all OK" headers back to the
-     browser */
-  server.httpSuccess();
-
-  /* if we're handling a GET or POST, we can output our data here.
-     For a HEAD request, we just stop after outputting headers. */
-  if (type == WebServer::HEAD)
-    return;
-
-  server.printP(Page_start);
-  switch (type)
-    {
-    case WebServer::GET:
-        server.printP(Get_head);
-        break;
-    case WebServer::POST:
-        server.printP(Post_head);
-        break;
-    default:
-        server.printP(Unknown_head);
-    }
-
-    server.printP(Parsed_head);
-    server.printP(tail_complete ? Good_tail_begin : Bad_tail_begin);
-    server.print(url_tail);
-    server.printP(Tail_end);
-
-  if (strlen(url_tail))
-    {
-    server.printP(Parsed_tail_begin);
-    while (strlen(url_tail))
-      {
-      rc = server.nextURLparam(&url_tail, name, NAMELEN, value, VALUELEN);
-      if (rc == URLPARAM_EOS)
-        server.printP(Params_end);
-       else
-        {
-        server.print(name);
-        server.printP(Parsed_item_separator);
-        server.print(value);
-        server.printP(Tail_end);
-        }
-      }
-    }
-  if (type == WebServer::POST)
-  {
-    server.printP(Post_params_begin);
-    while (server.readPOSTparam(name, NAMELEN, value, VALUELEN))
-    {
-      server.print(name);
-      server.printP(Parsed_item_separator);
-      server.print(value);
-      server.printP(Tail_end);
-    }
-  }
-  server.printP(Page_end);
-
-}
-
-void my_failCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail, bool tail_complete)
-{
-  /* this line sends the "HTTP 400 - Bad Request" headers back to the
-     browser */
-  server.httpFail();
-
-  /* if we're handling a GET or POST, we can output our data here.
-     For a HEAD request, we just stop after outputting headers. */
-  if (type == WebServer::HEAD)
-    return;
-
-  server.printP(Page_start);
-  switch (type)
-    {
-    case WebServer::GET:
-        server.printP(Get_head);
-        break;
-    case WebServer::POST:
-        server.printP(Post_head);
-        break;
-    default:
-        server.printP(Unknown_head);
-    }
-
-    server.printP(Default_head);
-    server.printP(tail_complete ? Good_tail_begin : Bad_tail_begin);
-    server.print(url_tail);
-    server.printP(Tail_end);
-    server.printP(Page_end);
-
 }
 
 // MQTT Callback function:
@@ -296,18 +244,47 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
 
     client.publish("/" + myID + "/state/LastPayload", String(myPayload));
 
-    if (myTopic == "/"+myID+"/set/Volume") {
+    if (myTopic == "/" + myID + "/set/Volume")
+    {
         int_payload = atoi(myPayload);
-        if (int_payload > 0 && int_payload < 30) {
+        if (int_payload > 0 && int_payload < 30)
+        {
             current_volume = int_payload;
         }
         stateChanged = true;
     }
 
-    if (myTopic == "/"+myID+"/set/melody") {
+    if (myTopic == "/" + myID + "/set/Melody")
+    {
         int_payload = atoi(myPayload);
-        if (int_payload > 0 && int_payload <= myDFPlayer.readFileCounts()) {
+        if (int_payload > 0 && int_payload <= myDFPlayer.readFileCounts())
+        {
             current_melody = int_payload;
+        }
+        stateChanged = true;
+    }
+
+    if (myTopic == "/" + myID + "/set/SilenceBegin")
+    {
+        silenceBegin = String(myPayload);
+        stateChanged = true;
+    }
+
+    if (myTopic == "/" + myID + "/set/SilenceEnd")
+    {
+        silenceEnd = String(myPayload);
+        stateChanged = true;
+    }
+
+    if (myTopic == "/" + myID + "/set/SilenceEnabled")
+    {
+        if (String(myPayload).toLowerCase() == "true")
+        {
+            silence_enabled = true;
+        }
+        else
+        {
+            silence_enabled = false;
         }
         stateChanged = true;
     }
@@ -338,7 +315,10 @@ void publishState()
         client.publish("/" + myID + "/state/CurrentVolume", String(current_volume));
         client.publish("/" + myID + "/state/Debug", debug ? "True" : "False");
         client.publish("/" + myID + "/state/VisitorDate", lastVisitDate);
-      }
+        client.publish("/" + myID + "/state/SilenceBegin", silenceBegin);
+        client.publish("/" + myID + "/state/SilenceEnd", silenceEnd);
+        client.publish("/" + myID + "/state/SilenceEnabled", silence_enabled ? "True" : "False");
+    }
 }
 
 // Publish current date+time when someone pushed the button:
@@ -346,7 +326,7 @@ void publishState()
 void publishButtonPushed()
 {
 
-    lastVisitDate = Time.format(Time.now(), TIME_FORMAT_ISO8601_FULL);
+    lastVisitDate = Time.format(Time.now(), "%H:%M:%S");
 
     if (!client.isConnected())
     {
@@ -362,26 +342,34 @@ void publishButtonPushed()
 
 void loadSettings()
 {
-
-    uint16_t maxSize = EEPROM.length();
     uint16_t address = 1;
     uint8_t version = 0;
-    char loadArray[2048];
 
     EEPROM.get(address++, version);
 
     if (version == SETTINGS_MAGIC)
     { // Valid settings in EEPROM?
         EEPROM.get(address, debug);
-        address = address + sizeof (debug);
+        address = address + sizeof(debug);
+        EEPROM.get(address, silence_enabled);
+        address = address + sizeof(silence_enabled);
         EEPROM.get(address, current_melody);
-        address = address + sizeof (current_melody);
+        address = address + sizeof(current_melody);
         EEPROM.get(address, current_volume);
-        address = address + sizeof (current_volume);
-        if (debug) { Particle.publish("DEBUG: Loaded settings.", PRIVATE); }
-    } else {
-        if (debug) { Particle.publish("DEBUG: Resetted to default settings.", PRIVATE); }
+        address = address + sizeof(current_volume);
+        if (debug)
+        {
+            Particle.publish("DEBUG: Loaded settings.", PRIVATE);
+        }
+    }
+    else
+    {
+        if (debug)
+        {
+            Particle.publish("DEBUG: Resetted to default settings.", PRIVATE);
+        }
         debug = true;
+        silence_enabled = false;
         current_melody = 2;
         current_volume = 30;
         saveSettings();
@@ -390,16 +378,18 @@ void loadSettings()
 
 void saveSettings()
 {
-
     uint16_t address = SETTINGS_START;
-    uint16_t maxlength = EEPROM.length();
-    char saveArray[2048];
 
-    if (debug) { Particle.publish("DEBUG: Saving settings.", PRIVATE); }
+    if (debug)
+    {
+        Particle.publish("DEBUG: Saving settings.", PRIVATE);
+    }
 
     EEPROM.write(address++, SETTINGS_MAGIC);
     EEPROM.put(address, debug);
     address = address + sizeof(debug);
+    EEPROM.put(address, silence_enabled);
+    address = address + sizeof(silence_enabled);
     EEPROM.put(address, current_melody);
     address = address + sizeof(current_melody);
     EEPROM.put(address, current_volume);
@@ -422,20 +412,38 @@ void setup()
     // Switch off onboard RGB-LED:
     RGB.control(true);
     RGB.brightness(0);
-    
+
     Serial1.begin(9600);
     delay(2000);
 
     loadSettings();
 
-    if (debug) { Particle.publish("DEBUG: Initializing DFPlayer ... (May take 3~5 seconds)", PRIVATE); }
+    if (debug)
+    {
+        Particle.publish("DEBUG: Initializing DFPlayer ... (May take 3~5 seconds)", PRIVATE);
+    }
 
-    if (!myDFPlayer.begin(Serial1)) { //Use softwareSerial to communicate with mp3.
-        if (debug) { Particle.publish("DEBUG: Unable to begin:", PRIVATE); }
-        if (debug) { Particle.publish("DEBUG: 1.Please recheck the connection!", PRIVATE); }
-        if (debug) { Particle.publish("DEBUG: 2.Please insert the SD card!", PRIVATE); }
-    } else {
-        if (debug) { Particle.publish("DEBUG: DFPlayer Mini online.", PRIVATE); }
+    if (!myDFPlayer.begin(Serial1))
+    { //Use softwareSerial to communicate with mp3.
+        if (debug)
+        {
+            Particle.publish("DEBUG: Unable to begin:", PRIVATE);
+        }
+        if (debug)
+        {
+            Particle.publish("DEBUG: 1.Please recheck the connection!", PRIVATE);
+        }
+        if (debug)
+        {
+            Particle.publish("DEBUG: 2.Please insert the SD card!", PRIVATE);
+        }
+    }
+    else
+    {
+        if (debug)
+        {
+            Particle.publish("DEBUG: DFPlayer Mini online.", PRIVATE);
+        }
     }
 
     //----Set serial communictaion time out 500ms
@@ -478,26 +486,19 @@ void setup()
         client.subscribe("/" + System.deviceID() + "/set/+");
     }
 
-    // Attach interrupt to input pin of push-button:
-    attachInterrupt(D5,playMelody,RISING);
-
     // Init webserver:
     //
     /* setup our default command that will be run when the user accesses
      * the root page on the server */
-    webserver.setDefaultCommand(&helloCmd);
+    webserver.setDefaultCommand(&indexCmd);
 
     /* setup our default command that will be run when the user accesses
      * a page NOT on the server */
-    webserver.setFailureCommand(&my_failCmd);
+    webserver.setFailureCommand(&indexCmd);
 
     /* run the same command if you try to load /index.html, a common
      * default page name */
-    webserver.addCommand("index.html", &helloCmd);
-
-    /*This command  is called if you try to load /raw.html */
-    webserver.addCommand("raw.html", &rawCmd);
-    webserver.addCommand("parsed.html", &parsedCmd);
+    webserver.addCommand("index.html", &indexCmd);
 
     /* start the webserver */
     webserver.begin();
@@ -505,17 +506,21 @@ void setup()
 
 void loop()
 {
-    char buff[64];
-    int len = 64;
+    char buff[128];
+    int len = 128;
 
     button_pressed = digitalRead(PIN_BTN);
     if (button_pressed == LOW)
     {
-        if (debug) { Particle.publish("DEBUG: Button pushed!", PRIVATE); }
+        if (debug)
+        {
+            Particle.publish("DEBUG: Button pushed!", PRIVATE);
+        }
         button_pressed = HIGH;
         playMelody();
     }
     delay(200);
 
-  /* process incoming connections one at a time forever */
-  webserver.processConnection(buff, &len);}
+    /* process incoming connections one at a time forever */
+    webserver.processConnection(buff, &len);
+}
