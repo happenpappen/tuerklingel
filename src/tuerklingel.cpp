@@ -28,7 +28,7 @@ String silenceBegin = "22:00";
 String silenceEnd = "06:00";
 
 String lastVisitDate = "";
-String myID = System.deviceID();
+static String myID = System.deviceID();
 
 #define ONE_DAY_MILLIS (24 * 60 * 60 * 1000)
 unsigned long lastSync = millis();
@@ -48,7 +48,7 @@ Timer PublisherTimer(5000, publishState);
 
 MQTT client(MQTT_HOST, 1883, mqtt_callback);
 
-ApplicationWatchdog wd(60000, System.reset);
+ApplicationWatchdog *wd = NULL;
 
 // Webserver related:
 //
@@ -237,11 +237,15 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     memcpy(myPayload, payload, length);
     myPayload[length] = 0;
 
+    if (debug)
+    {
+        Particle.publish("DEBUG: Message received: "+String(myPayload), PRIVATE);
+    }
+
     if (!client.isConnected())
     {
         client.connect(myID, MQTT_USER, MQTT_PASSWORD);
     }
-
     client.publish("/" + myID + "/state/LastPayload", String(myPayload));
 
     if (myTopic == "/" + myID + "/set/Volume")
@@ -250,6 +254,10 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
         if (int_payload > 0 && int_payload < 30)
         {
             current_volume = int_payload;
+            if (debug)
+            {
+                Particle.publish("DEBUG: Set volume to: "+String(int_payload), PRIVATE);
+            }
         }
         stateChanged = true;
     }
@@ -260,6 +268,10 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
         if (int_payload > 0 && int_payload <= myDFPlayer.readFileCounts())
         {
             current_melody = int_payload;
+            if (debug)
+            {
+                Particle.publish("DEBUG: Set melody to: "+String(int_payload), PRIVATE);
+            }
         }
         stateChanged = true;
     }
@@ -479,11 +491,16 @@ void setup()
     dst.check();
     dst.automatic(true);
 
-    client.connect(System.deviceID(), MQTT_USER, MQTT_PASSWORD); // uid:pwd based authentication
+    client.connect(myID, MQTT_USER, MQTT_PASSWORD); // uid:pwd based authentication
+
     if (client.isConnected())
     {
         PublisherTimer.start();
-        client.subscribe("/" + System.deviceID() + "/set/+");
+        client.subscribe("/" + myID + "/set/+");
+        if (debug)
+        {
+            Particle.publish("DEBUG: Subscribed to topic: /"+ myID + "/set/+", PRIVATE);
+        }
     }
 
     // Init webserver:
@@ -502,6 +519,10 @@ void setup()
 
     /* start the webserver */
     webserver.begin();
+
+    // Start watchdog. Reset the system after 60 seconds if 
+    // the application is unresponsive.
+    wd = new ApplicationWatchdog(60000, System.reset, 1536);
 }
 
 void loop()
@@ -520,6 +541,12 @@ void loop()
         playMelody();
     }
     delay(200);
+
+    if (client.isConnected()) {
+        client.loop();
+    } else {
+        client.connect(myID, MQTT_USER, MQTT_PASSWORD);
+    }
 
     /* process incoming connections one at a time forever */
     webserver.processConnection(buff, &len);
