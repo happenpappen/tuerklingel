@@ -12,6 +12,9 @@
 #define SETTINGS_MAGIC 45
 #define SETTINGS_START 1
 
+#define MIN_VOLUME 0
+#define MAX_VOLUME 30
+
 // For daylight saving time:
 DST dst;
 
@@ -251,7 +254,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     if (myTopic == "/" + myID + "/set/Volume")
     {
         int_payload = atoi(myPayload);
-        if (int_payload > 0 && int_payload < 30)
+        if (int_payload >= MIN_VOLUME && int_payload < MAX_VOLUME)
         {
             current_volume = int_payload;
             if (debug)
