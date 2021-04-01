@@ -127,7 +127,7 @@ void indexCmd(WebServer &server, WebServer::ConnectionType type, char *url_tail,
         {
             repeat = server.readPOSTparam(name, sizeof(name), value, sizeof(value));
             valLen = strlen(value);
-            if (debug)
+            if (debug && Particle.connected())
             {
                 Particle.publish("DEBUG: Post-Parameter: '" + String(name) + "' read, Value: " + String(value), PRIVATE);
             }
@@ -240,7 +240,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     memcpy(myPayload, payload, length);
     myPayload[length] = 0;
 
-    if (debug)
+    if (debug && Particle.connected())
     {
         Particle.publish("DEBUG: Message received: "+String(myPayload), PRIVATE);
     }
@@ -257,7 +257,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
         if (int_payload >= MIN_VOLUME && int_payload < MAX_VOLUME)
         {
             current_volume = int_payload;
-            if (debug)
+            if (debug && Particle.connected())
             {
                 Particle.publish("DEBUG: Set volume to: "+String(int_payload), PRIVATE);
             }
@@ -271,7 +271,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
         if (int_payload > 0 && int_payload <= myDFPlayer.readFileCounts())
         {
             current_melody = int_payload;
-            if (debug)
+            if (debug && Particle.connected())
             {
                 Particle.publish("DEBUG: Set melody to: "+String(int_payload), PRIVATE);
             }
@@ -372,14 +372,14 @@ void loadSettings()
         address = address + sizeof(current_melody);
         EEPROM.get(address, current_volume);
         address = address + sizeof(current_volume);
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: Loaded settings.", PRIVATE);
         }
     }
     else
     {
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: Resetted to default settings.", PRIVATE);
         }
@@ -395,7 +395,7 @@ void saveSettings()
 {
     uint16_t address = SETTINGS_START;
 
-    if (debug)
+    if (debug && Particle.connected())
     {
         Particle.publish("DEBUG: Saving settings.", PRIVATE);
     }
@@ -433,29 +433,29 @@ void setup()
 
     loadSettings();
 
-    if (debug)
+    if (debug && Particle.connected())
     {
         Particle.publish("DEBUG: Initializing DFPlayer ... (May take 3~5 seconds)", PRIVATE);
     }
 
     if (!myDFPlayer.begin(Serial1))
     { //Use softwareSerial to communicate with mp3.
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: Unable to begin:", PRIVATE);
         }
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: 1.Please recheck the connection!", PRIVATE);
         }
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: 2.Please insert the SD card!", PRIVATE);
         }
     }
     else
     {
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: DFPlayer Mini online.", PRIVATE);
         }
@@ -500,7 +500,7 @@ void setup()
     {
         PublisherTimer.start();
         client.subscribe("/" + myID + "/set/+");
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: Subscribed to topic: /"+ myID + "/set/+", PRIVATE);
         }
@@ -536,7 +536,7 @@ void loop()
     button_pressed = digitalRead(PIN_BTN);
     if (button_pressed == LOW)
     {
-        if (debug)
+        if (debug && Particle.connected())
         {
             Particle.publish("DEBUG: Button pushed!", PRIVATE);
         }
